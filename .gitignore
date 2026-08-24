@@ -1,0 +1,11 @@
+#No data files
+*.dat
+
+#No pictures
+*.pdf
+
+#No executables
+*.o
+make_props
+a.out
+grains
