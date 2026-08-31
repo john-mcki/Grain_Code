@@ -162,7 +162,7 @@ void reduce2D_2ndrank(const vector<double> &in, vector<double> &out,
 // --- MAIN PROGRAM --- //
 int main() {
   // Dimensions
-  const int nx = 256, ny = 256, np = 3;
+  const int nx = 256, ny = 256, np = 29;
   const int pad_x = nx + 2, pad_y = ny + 2;
 
   // Initialize RNG
@@ -173,14 +173,13 @@ int main() {
   // Theta itself can be directly calculated from a randomly generated number
   // and multipled by pi, spectrum of possible theta values is thus (0, pi)
   // NOTE: follows normal distribution trend, possibly favored toward pi/2
-  /*
   vector<double> theta(np);
   for (int i = 0; i < np; ++i) {
     theta[i] = dis(gen) * PI;
   }
-  */
 
   // Specific thetas for bicrystal case
+  /*
   vector<double> theta(np);
   vector<double> bicrystal_rotations(np); // theta values
   bicrystal_rotations[0] = 0.0;
@@ -189,6 +188,7 @@ int main() {
   for (int i = 0; i < np; ++i) {
     theta[i] = bicrystal_rotations[i];
   }
+  */
 
   // Check these later
   vector<double> Cel_ref_2D = {260, 260, 45, 84, -16, 0};

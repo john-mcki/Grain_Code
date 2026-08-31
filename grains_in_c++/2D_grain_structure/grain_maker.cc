@@ -14,8 +14,8 @@ int main() {
   const int pad_x = nx + 2,
             pad_y = ny + 2; // Including buffer layers (x1-1 to x2+1)
 
-  const int np_initial = 14;
-  const int ssteps = 10;
+  const int np_initial = 100;
+  const int ssteps = 4600;
 
   const double dh = 1.0;
   const double gamma = 1.5;
@@ -39,7 +39,7 @@ int main() {
   cout << "Initializing Voronoi tessellation..." << endl;
   vector<int> featureID(pad_x * pad_y, 0);
   vector<vector<double>> centers(np_initial, vector<double>(2));
-  /*
+
   mt19937 gen(44392); // Replicating the Fortran random seed
   uniform_real_distribution<double> dist(0.0, 1.0);
 
@@ -48,62 +48,6 @@ int main() {
     centers[ip][0] = dist(gen) * length[0];
     centers[ip][1] = dist(gen) * length[1];
   }
-  */
-
-  // Fixed 4 grain case, ensure np = 8
-  // Sort this out later, currently a little odd
-  /*
-  centers[0][0] = 0.4 * nx; // 1x
-  centers[0][1] = 0.4 * ny; // 1y
-  centers[1][0] = 0.6 * nx; // 2x
-  centers[1][1] = 0.6 * ny; // 2y
-  centers[2][0] = 0.4 * nx; // 3x
-  centers[2][1] = 0.6 * ny; // 3y
-  centers[3][0] = 0.6 * nx; // 4x
-  centers[3][1] = 0.4 * ny; // 4y
-  centers[4][0] = 0.1 * nx; // 1x
-  centers[4][1] = 0.1 * ny; // 1y
-  centers[5][0] = 0.9 * nx; // 2x
-  centers[5][1] = 0.9 * ny; // 2y
-  centers[6][0] = 0.1 * nx; // 3x
-  centers[6][1] = 0.9 * ny; // 3y
-  centers[7][0] = 0.9 * nx; // 4x
-  centers[7][1] = 0.1 * ny; // 4y
-
-  // Bicrystal case, np = 14
-
-  centers[0][0] = 0.5 * nx;   // 1x
-  centers[0][1] = 0.475 * ny; // 1y
-  centers[1][0] = 0.5 * nx;
-  centers[1][1] = 0.525 * ny;
-
-  centers[2][0] = 0.5 * nx;
-  centers[2][1] = 0.05 * ny;
-  centers[3][0] = 0.05 * nx;
-  centers[3][1] = 0.5 * ny;
-  centers[4][0] = 0.5 * nx;
-  centers[4][1] = 0.95 * ny;
-  centers[5][0] = 0.95 * nx;
-  centers[5][1] = 0.5 * ny;
-
-  centers[6][0] = 0.818198 * nx;
-  centers[6][1] = 0.818198 * ny;
-  centers[7][0] = 0.818198 * nx;
-  centers[7][1] = 0.181802 * ny;
-  centers[8][0] = 0.181802 * nx;
-  centers[8][1] = 0.181802 * ny;
-  centers[9][0] = 0.181802 * nx;
-  centers[9][1] = 0.818198 * ny;
-
-  centers[10][0] = 0.9 * nx;
-  centers[10][1] = 0.9 * ny;
-  centers[11][0] = 0.9 * nx;
-  centers[11][1] = 0.1 * ny;
-  centers[12][0] = 0.1 * nx;
-  centers[12][1] = 0.1 * ny;
-  centers[13][0] = 0.1 * nx;
-  centers[13][1] = 0.9 * ny;
-  */
 
   for (int iy = 0; iy < pad_y; ++iy) {
     for (int ix = 0; ix < pad_x; ++ix) {
@@ -159,7 +103,26 @@ int main() {
 
   cout << "Grains reduced from " << np_initial << " to " << npeff << endl;
 
+  // --- INITIALIZE ORDER PARAMETERS (PHI) --- //
+  vector<double> Phi(pad_x * pad_y * npeff, 0.0);
+  for (int ip = 0; ip < npeff; ++ip) {
+    for (int iy = 0; iy < pad_y; ++iy) {
+      for (int ix = 0; ix < pad_x; ++ix) {
+        if (featureID[idx2(ix, iy)] == index_to_featureID[ip]) {
+          Phi[idx3(ix, iy, ip, npeff)] = 1.0;
+        }
+      }
+    }
+  }
+
+  featureID.clear(); // Free memory
+  index_to_featureID.clear();
+
+  vector<double> Phi_new = Phi;
+  vector<double> smsq(pad_x * pad_y, 0.0);
+
   // Fixed case where there are two grains inside a circle
+  /*
   centers[0][0] = 0.4 * nx;
   centers[0][1] = 0.5 * ny;
   centers[1][0] = 0.6 * nx;
@@ -195,26 +158,6 @@ int main() {
   }
 
   // --- INITIALIZE ORDER PARAMETERS (PHI) --- //
-  /*
-  vector<double> Phi(pad_x * pad_y * npeff, 0.0);
-  for (int ip = 0; ip < npeff; ++ip) {
-    for (int iy = 0; iy < pad_y; ++iy) {
-      for (int ix = 0; ix < pad_x; ++ix) {
-        if (featureID[idx2(ix, iy)] == index_to_featureID[ip]) {
-          Phi[idx3(ix, iy, ip, npeff)] = 1.0;
-        }
-      }
-    }
-  }
-
-  featureID.clear(); // Free memory
-  index_to_featureID.clear();
-
-  vector<double> Phi_new = Phi;
-  vector<double> smsq(pad_x * pad_y, 0.0);
-  */
-
-  // --- INITIALIZE ORDER PARAMETERS (PHI) --- //
   int npeff = np_initial + 1;
   cout << "Total effective phases (grains + boundary): " << npeff << endl;
 
@@ -222,11 +165,11 @@ int main() {
   iota(index_to_featureID.begin(), index_to_featureID.end(),
        0); // Maps 0, 1, 2 smoothly
 
-  vector<double> Phi(pad_x *)
+  vector<double> Phi(pad_x * pad_y * npeff, 0.0);
+  */
 
-      // --- TIME EVOLUTION ---
-      cout
-      << "Starting time integration (" << ssteps << " steps)..." << endl;
+  // --- TIME EVOLUTION ---
+  cout << "Starting time integration (" << ssteps << " steps)..." << endl;
   for (int it = 0; it <= ssteps; ++it) {
 
     // Compute smsq = sum(Phi^2)
