@@ -1,10 +1,13 @@
-#No data files
+# No random mac interference
+.DS_Store
+
+# No data files
 *.dat
 
-#No pictures
+# No pictures
 *.pdf
 
-#No executables
+# No executables
 *.o
 make_props
 a.out
