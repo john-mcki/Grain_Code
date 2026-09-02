@@ -10,17 +10,19 @@ using namespace std;
 
 int main() {
   // --- PARAMETERS ---
-  const int nx = 128, ny = 128, nz = 128;
+  const int nx = 97, ny = 97, nz = 97;
   const int pad_x = nx + 2, pad_y = ny + 2,
             pad_z = nz + 2; // Including buffer layers (x1-1 to x2+1)
-  const int np_initial = 100;
-  const int ssteps = 500;
+  const int extrax = 16;
+  const int innerx = nx - 2*extrax, innery = ny - 2*extrax, innerz = nz - 2*extrax; 
+  const int np_initial = 200;
+  const int ssteps = 700;
 
   const double dh = 1.0;
   const double gamma = 1.5;
   const double W = 1.0;
   const double eps_sq = 1.0;
-  const double sLdt = 0.1;
+  const double sLdt = 0.08;
 
   // Helper lambdas for multi-dimensional 1D indexing
   // Layout: [z][y][x][p] to optimize cache locality during the spatial stencils
@@ -30,6 +32,14 @@ int main() {
 
   auto idx4 = [pad_x, pad_y](int x, int y, int z, int p, int num_p) {
     return ((z * pad_y * pad_x) + (y * pad_x) + x) * num_p + p;
+  };
+  
+  auto idx3_small = [innerx, innery](int x, int y, int z) {
+    return (z * innery * innerx) + (y * innerx) + x;
+  };
+  
+  auto idx4_small = [innerx, innery](int x, int y, int z, int p, int num_p) {
+    return ((z * innery * innerx) + (y * innerx) + x) * num_p + p;
   };
 
   // --- INITIAL VORONOI TESSELLATION ---
@@ -46,6 +56,11 @@ int main() {
     centers[ip][1] = dist(gen) * length[1];
     centers[ip][2] = dist(gen) * length[2];
   }
+  
+  // ip = 0 is now the big grain
+  centers[0][0] = 0.0;
+  centers[0][1] = 0.0;
+  centers[0][2] = 0.0;
 
   for (int iz = 0; iz < pad_z; ++iz) {
     for (int iy = 0; iy < pad_y; ++iy) {
@@ -69,25 +84,20 @@ int main() {
       }
     }
   }
-
+  
   // --- KNOCK OUT GRAINS ---
   cout << "Knocking out invalid grains..." << endl;
   vector<int> index_to_featureID;
   int npeff = 0;
 
-  for (int ip = 0; ip < np_initial; ++ip) {
+  for (int ip = 1; ip < np_initial; ++ip) {
     int count_mask = 0;
     for (int v : featureID) {
       if (v == ip)
         count_mask++;
     }
 
-    double dist2_center = pow(centers[ip][0] - (nx / 2.0), 2) +
-                          pow(centers[ip][1] - (ny / 2.0), 2) +
-                          pow(centers[ip][2] - (nz / 2.0), 2);
-    double radius_limit = pow((nx / 2.0) * 0.85, 2);
-
-    if (count_mask < 300 || dist2_center > radius_limit) {
+    if (count_mask < 100) {
       for (int &v : featureID) {
         if (v == ip)
           v = np_initial; // mapped to invalid grain
@@ -106,12 +116,17 @@ int main() {
 
   // --- INITIALIZE ORDER PARAMETERS (PHI) ---
   vector<double> Phi(pad_x * pad_y * pad_z * npeff, 0.0);
-  for (int ip = 0; ip < npeff; ++ip) {
-    for (int iz = 0; iz < pad_z; ++iz) {
-      for (int iy = 0; iy < pad_y; ++iy) {
-        for (int ix = 0; ix < pad_x; ++ix) {
-          if (featureID[idx3(ix, iy, iz)] == index_to_featureID[ip]) {
-            Phi[idx4(ix, iy, iz, ip, npeff)] = 1.0;
+  for (int iz = 0; iz < pad_z; ++iz) {
+    for (int iy = 0; iy < pad_y; ++iy) {
+      for (int ix = 0; ix < pad_x; ++ix) {
+        double dist = sqrt(pow(ix - (nx / 2.0), 2) +
+                                 pow(iy - (ny / 2.0), 2) +
+                                 pow(iz - (nz / 2.0), 2));
+        double distfn = 0.5*(1.0+tanh((innerx/2*1.2-dist)/2.0));
+        Phi[idx4(ix, iy, iz, 0, npeff)] = 1.0-distfn;
+        for (int ip = 0; ip < npeff; ++ip) {
+          if (featureID[idx3(ix, iy, iz)] == ip) {
+            Phi[idx4(ix, iy, iz, ip, npeff)] = distfn;
           }
         }
       }
@@ -120,9 +135,31 @@ int main() {
 
   featureID.clear(); // Free memory
   index_to_featureID.clear();
+  
+  // Applying Dirichlet BCs
+  for (int ip = 0; ip < npeff; ++ip) {
+    for (int iz = 0; iz < pad_z; ++iz) {
+      for (int iy = 0; iy < pad_y; ++iy) {
+        Phi[idx4(0, iy, iz, ip, npeff)] = 0.0;
+        Phi[idx4(nx + 1, iy, iz, ip, npeff)] = 0.0;
+      }
+      for (int ix = 0; ix < pad_x; ++ix) {
+        Phi[idx4(ix, 0, iz, ip, npeff)] = 0.0;
+        Phi[idx4(ix, ny + 1, iz, ip, npeff)] = 0.0;
+      }
+    }
+    for (int iy = 0; iy < pad_y; ++iy) {
+      for (int ix = 0; ix < pad_x; ++ix) {
+        Phi[idx4(ix, iy, 0, ip, npeff)] = 0.0;
+        Phi[idx4(ix, iy, nz + 1, ip, npeff)] = 0.0;
+      }
+    }
+  }
 
   vector<double> Phi_new = Phi;
   vector<double> smsq(pad_x * pad_y * pad_z, 0.0);
+
+  
 
   // --- TIME EVOLUTION ---
   cout << "Starting time integration (" << ssteps << " steps)..." << endl;
@@ -167,32 +204,6 @@ int main() {
       }
     }
 
-    // Apply Periodic BCs in buffer layers
-    for (int ip = 0; ip < npeff; ++ip) {
-      for (int iz = 0; iz < pad_z; ++iz) {
-        for (int iy = 0; iy < pad_y; ++iy) {
-          Phi_new[idx4(0, iy, iz, ip, npeff)] =
-              Phi_new[idx4(nx, iy, iz, ip, npeff)];
-          Phi_new[idx4(nx + 1, iy, iz, ip, npeff)] =
-              Phi_new[idx4(1, iy, iz, ip, npeff)];
-        }
-        for (int ix = 0; ix < pad_x; ++ix) {
-          Phi_new[idx4(ix, 0, iz, ip, npeff)] =
-              Phi_new[idx4(ix, ny, iz, ip, npeff)];
-          Phi_new[idx4(ix, ny + 1, iz, ip, npeff)] =
-              Phi_new[idx4(ix, 1, iz, ip, npeff)];
-        }
-      }
-      for (int iy = 0; iy < pad_y; ++iy) {
-        for (int ix = 0; ix < pad_x; ++ix) {
-          Phi_new[idx4(ix, iy, 0, ip, npeff)] =
-              Phi_new[idx4(ix, iy, nz, ip, npeff)];
-          Phi_new[idx4(ix, iy, nz + 1, ip, npeff)] =
-              Phi_new[idx4(ix, iy, 1, ip, npeff)];
-        }
-      }
-    }
-
     Phi = Phi_new;
 
     // --- DYNAMIC GRAIN PRUNING ---
@@ -231,11 +242,14 @@ int main() {
         Phi = Phi_shrink;
         Phi_new = Phi;
         npeff = npeff_fin;
-      } else if (it % 500 == 0) {
-        cout << "Step " << it << " completed." << endl;
       }
     }
+    if (it % 500 == 0) {
+        cout << "Step " << it << " completed." << endl;
+    }
   }
+
+
 
   // --- POST-PROCESSING ---
   cout << "Normalizing and writing outputs..." << endl;
@@ -283,13 +297,18 @@ int main() {
   // Extract interior grid for outputs (ignoring pad layers, mapping to exact
   // dimensions make_props expects)
 
+  cout << "writing into " << innerx << "x" << innery << "x" << innerz << endl;
+
   // 1. grain_vis.dat
-  vector<double> smsq_out(nx * ny * nz);
-  for (int iz = 1; iz <= nz; ++iz)
-    for (int iy = 1; iy <= ny; ++iy)
-      for (int ix = 1; ix <= nx; ++ix)
-        smsq_out[((iz - 1) * ny + (iy - 1)) * nx + (ix - 1)] =
-            smsq[idx3(ix, iy, iz)];
+  vector<double> smsq_out(innerx * innery * innerz);
+  for (int iz = 0; iz <= innerz-1; ++iz) {
+    for (int iy = 0; iy <= innery-1; ++iy) {
+      for (int ix = 0; ix <= innerx-1; ++ix) {
+        smsq_out[idx3_small(ix,iy,iz)] =
+            smsq[idx3(ix+extrax, iy+extrax, iz+extrax)];
+      }
+    }
+  }
 
   ofstream outVis("grain_vis.dat", ios::binary);
   if (outVis.is_open()) {
@@ -300,14 +319,12 @@ int main() {
 
   // 2. grains.dat (This must perfectly match the 4D interior space for your
   // other C++ script)
-  vector<double> Phi_out(nx * ny * nz * npeff);
-  for (int iz = 1; iz <= nz; ++iz) {
-    for (int iy = 1; iy <= ny; ++iy) {
-      for (int ix = 1; ix <= nx; ++ix) {
+  vector<double> Phi_out(innerx * innery * innerz * npeff);
+  for (int iz = 0; iz <= innerz-1; ++iz) {
+    for (int iy = 0; iy <= innery-1; ++iy) {
+      for (int ix = 0; ix <= innerx-1; ++ix) {
         for (int ip = 0; ip < npeff; ++ip) {
-          int out_idx = (((ix - 1) * ny + (iy - 1)) * nz + (iz - 1)) * npeff +
-                        ip; // matches idx4D in make_props
-          Phi_out[out_idx] = Phi[idx4(ix, iy, iz, ip, npeff)];
+          Phi_out[idx4_small(ix,iy,iz,ip, npeff)] = Phi[idx4(ix+extrax, iy+extrax, iz+extrax, ip, npeff)];
         }
       }
     }
