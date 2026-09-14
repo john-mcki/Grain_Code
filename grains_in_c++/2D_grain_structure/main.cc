@@ -162,7 +162,7 @@ void reduce2D_2ndrank(const vector<double> &in, vector<double> &out,
 // --- MAIN PROGRAM --- //
 int main() {
   // Dimensions
-  const int nx = 256, ny = 256, np = 29;
+  const int nx = 256, ny = 256, np = 26;
   const int pad_x = nx + 2, pad_y = ny + 2;
 
   // Initialize RNG
@@ -190,10 +190,15 @@ int main() {
   }
   */
 
-  // Check these later
-  vector<double> Cel_ref_2D = {260, 260, 45, 84, -16, 0};
-  vector<double> Bel_ref_2D = {0.028, 0.028, -0.030};
-  vector<double> D_ref_2D = {1e-3, 1e-3, 1e-4};
+  // anisotropic tensors
+  vector<double> Cel_ref_2D = {260, 200, 45, 46, 0, 0};
+  // vector<double> Bel_ref_2D = {0.028, -0.030, 0};
+  // vector<double> D_ref_2D = {1e-3, 1e-4, 0};
+
+  // isotropic tensors
+  // vector<double> Cel_ref_2D = {206, 206, 67, 72, 0, 0};
+  vector<double> Bel_ref_2D = {0.025, 0.025, 0};
+  vector<double> D_ref_2D = {4.64e-4, 4.64e-4, 0};
 
   TensorMod::load_Cel_tnsr_2D(Cel_ref_2D);
   Mat22 Bel_tnsr_2D = TensorMod::load_Bel_tnsr_2D(Bel_ref_2D);
@@ -280,9 +285,9 @@ int main() {
   for (int j = 1; j <= ny + 1; ++j) {
     for (int i = 1; i <= nx + 1; ++i) {
       if (i <= nx && j <= ny) {
-        PsiOut_flat.push_back(1.0 - PhiSolid[idx3D(i, j, outgrain)]);
+        PsiOut_flat.push_back(max(1.0 - PhiSolid[idx3D(i, j, outgrain)], 1e-6));
       } else {
-        PsiOut_flat.push_back(0.0);
+        PsiOut_flat.push_back(1e-6);
       }
     }
   }

@@ -126,12 +126,13 @@ IMPLICIT NONE
     print*, "outer grainID: ", outgrain
 
     allocate( PsiOut(x1:x2+1,y1:y2+1))
-    PsiOut(x1:x2+1,y1:y2+1) = 0.d0
+    PsiOut(x1:x2+1,y1:y2+1) = 1d-6
     PsiOut(x1:x2,y1:y2) = 1.d0 - PhiSolid(x1:x2,y1:y2,1, outgrain)
+    where (PsiOut < 1d-6) PsiOut = 1d-6
 !    PsiOut(x1:x2+1,y1:y2+1) = 1d0
     OPEN(UNIT=20,FILE='psi.dat',FORM='UNFORMATTED',STATUS='REPLACE',ACTION='WRITE', access='stream')
     WRITE(20) PsiOut
-    CLOSE(20)   
+    CLOSE(20)
 
     PhiSolid(x1-1:x2+1,y1-1:y2+1,z1-1:z2+1,outgrain) = 0d0
     print*, "renormalizing order parameters"
@@ -184,19 +185,30 @@ IMPLICIT NONE
         enddo
       enddo
     enddo
-    
+    print*, "starting elastic constants calculation1"
 ! constant test cases
 !    Cel2D(1:6,x1-1:x2+1,y1-1:y2+1,z1-1:z2+1) = 0.0
 !    Cel2D(1:2,x1-1:x2+1,y1-1:y2+1,z1-1:z2+1) = 0.7
-!    Cel2D(3,x1-1:x2+1,y1-1:y2+1,z1-1:z2+1) = 0.3
-!    Cel2D(4:5,x1-1:x2+1,y1-1:y2+1,z1-1:z2+1) = 0.2
+!    Cel2D(3,x1-1:x2+1,y1-1:y2+1,z1-1:z2+1) = 0.2
+!    Cel2D(4,x1-1:x2+1,y1-1:y2+1,z1-1:z2+1) = 0.3
 !    Bel2D(1:3,x1-1:x2+1,y1-1:y2+1,z1-1:z2+1) = 0.0
 !    Bel2D(1:2,x1-1:x2+1,y1-1:y2+1,z1-1:z2+1) = 0.01
 !    D2D(1:3,x1-1:x2+1,y1-1:y2+1,z1-1:z2+1) = 0.0
 !    D2D(1:2,x1-1:x2+1,y1-1:y2+1,z1-1:z2+1) = 1d-4
-    
+    print*, "starting elastic constants calculation2"
+
+    do k = z1-1,z2+1
+      do j = y1-1,y2+1
+        do i = x1-1,x2+1
+          if (Cel2D(1,i,j,k) < 1d-6) Cel2D(1,i,j,k) = 1d-6
+          if (Cel2D(2,i,j,k) < 1d-6) Cel2D(2,i,j,k) = 1d-6
+          if (Cel2D(3,i,j,k) < 1d-6) Cel2D(3,i,j,k) = 1d-6
+        enddo
+      enddo
+    enddo
     
     do i = 1,6
+      print*, minval(Cel2D(i,x1:x2+1,y1:y2+1,z1:z2+1))
       print*, sum(Cel2D(i,x1:x2+1,y1:y2+1,z1:z2+1))/((nx+1)*(ny+1)*(nz+1))
     enddo
     do i = 1,3
@@ -206,7 +218,7 @@ IMPLICIT NONE
       print*, sum(D2D(i,x1:x2+1,y1:y2+1,z1:z2+1))/((nx+1)*(ny+1)*(nz+1))
     enddo
     
-    Cel2D(1:3,x1:x2+1,y1:y2+1,1) = MAX(Cel2D(1:3,x1:x2+1,y1:y2+1,1), 1.d0)
+  !  Cel2D(1:3,x1:x2+1,y1:y2+1,1) = MAX(Cel2D(1:3,x1:x2+1,y1:y2+1,1), 1.d0)
     
     OPEN(UNIT=20,FILE='Cv2D_1.dat',FORM='UNFORMATTED',STATUS='REPLACE',ACTION='WRITE', access='stream')
     WRITE(20) Cel2D(1:2,x1:x2+1,y1:y2+1,1)
