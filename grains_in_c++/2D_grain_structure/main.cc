@@ -162,7 +162,7 @@ void reduce2D_2ndrank(const vector<double> &in, vector<double> &out,
 // --- MAIN PROGRAM --- //
 int main() {
   // Dimensions
-  const int nx = 256, ny = 256, np = 26;
+  const int nx = 256, ny = 256, np = 29;
   const int pad_x = nx + 2, pad_y = ny + 2;
 
   // Initialize RNG
@@ -178,27 +178,15 @@ int main() {
     theta[i] = dis(gen) * PI;
   }
 
-  // Specific thetas for bicrystal case
-  /*
-  vector<double> theta(np);
-  vector<double> bicrystal_rotations(np); // theta values
-  bicrystal_rotations[0] = 0.0;
-  bicrystal_rotations[1] = PI / 2.0;
-  bicrystal_rotations[2] = 0.0;
-  for (int i = 0; i < np; ++i) {
-    theta[i] = bicrystal_rotations[i];
-  }
-  */
-
   // anisotropic tensors
   vector<double> Cel_ref_2D = {260, 200, 45, 46, 0, 0};
-  // vector<double> Bel_ref_2D = {0.028, -0.030, 0};
-  // vector<double> D_ref_2D = {1e-3, 1e-4, 0};
+  vector<double> Bel_ref_2D = {0.028, -0.030, 0};
+  vector<double> D_ref_2D = {1e-3, 1e-4, 0};
 
   // isotropic tensors
   // vector<double> Cel_ref_2D = {206, 206, 67, 72, 0, 0};
-  vector<double> Bel_ref_2D = {0.025, 0.025, 0};
-  vector<double> D_ref_2D = {4.64e-4, 4.64e-4, 0};
+  // vector<double> Bel_ref_2D = {0.025, 0.025, 0};
+  // vector<double> D_ref_2D = {4.64e-4, 4.64e-4, 0};
 
   TensorMod::load_Cel_tnsr_2D(Cel_ref_2D);
   Mat22 Bel_tnsr_2D = TensorMod::load_Bel_tnsr_2D(Bel_ref_2D);
@@ -454,6 +442,7 @@ int main() {
   };
 
   // Output identical data blocks to the 7 original Fortran files
+  /*
   write_binary_subset("Cv2D_1.dat", Cel, 0, 1);
   write_binary_subset("Cv2D_2.dat", Cel, 2, 3);
   write_binary_subset("Cv2D_3.dat", Cel, 4, 5);
@@ -463,6 +452,18 @@ int main() {
 
   write_binary_subset("Dv2D_1.dat", D_fld, 0, 1);
   write_binary_subset("Dv2D_2.dat", D_fld, 2, 2);
+  */
+
+  // uncomment if the data is anisotropic
+  write_binary_subset("Cv2D_1_aniso.dat", Cel, 0, 1);
+  write_binary_subset("Cv2D_2_aniso.dat", Cel, 2, 3);
+  write_binary_subset("Cv2D_3_aniso.dat", Cel, 4, 5);
+
+  write_binary_subset("eigv2D_1_aniso.dat", Bel, 0, 1);
+  write_binary_subset("eigv2D_2_aniso.dat", Bel, 2, 2);
+
+  write_binary_subset("Dv2D_1_aniso.dat", D_fld, 0, 1);
+  write_binary_subset("Dv2D_2_aniso.dat", D_fld, 2, 2);
 
   return 0;
 }
